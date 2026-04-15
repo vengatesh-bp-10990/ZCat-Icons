@@ -5,6 +5,8 @@ import Gallery from './pages/Gallery'
 import AdminPanel from './pages/AdminPanel'
 
 const IS_LOCAL = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+const APPSAIL_URL = 'https://zcat-icons-api-50041188332.development.catalystappsail.in'
+const API_BASE = IS_LOCAL ? '/api' : `${APPSAIL_URL}/api`
 
 function App() {
   const [user, setUser] = useState(null)
@@ -17,7 +19,7 @@ function App() {
     if (storedUser && storedToken) {
       const parsed = JSON.parse(storedUser)
       // Validate session is still active
-      fetch('/api/icons?page=1&limit=1', {
+      fetch(`${API_BASE}/icons?page=1&limit=1`, {
         headers: { Authorization: storedToken ? `Zoho-oauthtoken ${storedToken}` : '' },
       })
         .then((res) => {

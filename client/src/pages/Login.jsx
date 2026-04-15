@@ -24,7 +24,7 @@ export default function Login({ onLogin }) {
       if (!loginDiv) return;
 
       auth.signIn("loginDivElement", {
-        project_id: "20508000000125077",
+        signin_providers_only: true,
       });
 
       sdkInitialized.current = true;

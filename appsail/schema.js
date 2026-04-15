@@ -41,14 +41,14 @@
  * │ CREATEDTIME  │ DATETIME │ Auto                      │
  * └──────────────┴──────────┴───────────────────────────┘
  *
- * STRATUS BUCKET: designer-icons
+ * STRATUS BUCKET: zcat-icons
  * Object path pattern: icons/{slug}/{style}.svg
  *
  * SETUP STEPS:
  * 1. Go to Catalyst Console → DataStore
  * 2. Create tables: Icons, IconVariants, Categories (exact names)
  * 3. Add columns as described above (ROWID, CREATEDTIME, MODIFIEDTIME are automatic)
- * 4. Go to Catalyst Console → Stratus → Create bucket "designer-icons"
+ * 4. Go to Catalyst Console → Stratus → Create bucket "zcat-icons"
  * 5. Set environment variables in AppSail config (GROQ_API_KEY, ALLOWED_ORIGINS)
  * 6. Deploy: catalyst deploy
  */
@@ -65,5 +65,5 @@ module.exports = {
       columns: ["name", "slug", "icon_count"],
     },
   },
-  stratusBucket: "designer-icons",
+  stratusBucket: "zcat-icons",
 };

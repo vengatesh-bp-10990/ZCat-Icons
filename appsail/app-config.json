@@ -2,6 +2,9 @@
   "command": "node index.js",
   "build_path": ".",
   "stack": "node18",
-  "env_variables": {},
+  "env_variables": {
+    "NODE_ENV": "production",
+    "ALLOWED_ORIGINS": "https://zcat-icons-api-50041188332.development.catalystappsail.in,https://designers-icons-60047187339.development.catalystserverless.com"
+  },
   "memory": 512
 }

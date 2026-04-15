@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 102
 
 const ICONS_TABLE = "Icons";
 const VARIANTS_TABLE = "IconVariants";
-const BUCKET_NAME = "designer-icons";
+const BUCKET_NAME = "zcat-icons";
 
 // Sanitize string for ZCQL queries — strip anything that could break out
 function sanitize(str) {

@@ -1,0 +1,13 @@
+{
+  "project_id": "20508000000125077",
+  "appsail": [
+    {
+      "name": "zcat-icons-api",
+      "stack": "node18",
+      "src": "appsail",
+      "port": 3000,
+      "memory": 512,
+      "disk": 512
+    }
+  ]
+}

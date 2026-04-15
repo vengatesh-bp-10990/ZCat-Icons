@@ -113,7 +113,7 @@ export default function Login({ onLogin }) {
             </div>
           )}
 
-          {IS_LOCAL ? (
+          {IS_LOCAL && (
             <>
               <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2 text-[11px] text-amber-400/80 mb-4">
                 Local dev mode — using mock admin login
@@ -121,7 +121,7 @@ export default function Login({ onLogin }) {
               <button
                 onClick={handleLocalLogin}
                 disabled={loading}
-                className="w-full bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-medium py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-medium py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 mb-3"
               >
                 {loading ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -133,10 +133,32 @@ export default function Login({ onLogin }) {
                 )}
               </button>
             </>
-          ) : (
-            <p className="text-[12px] text-zinc-600 text-center">Sign in with your Zoho account above</p>
           )}
-          <p className="text-[11px] text-zinc-700 text-center mt-3">Zoho accounts only</p>
+
+          {!IS_LOCAL && (
+            <p className="text-[12px] text-zinc-600 text-center mb-3">Sign in with your Zoho account above</p>
+          )}
+
+          <div className="border-t border-zinc-800/50 pt-3">
+            <button
+              onClick={() => {
+                const guestUser = {
+                  user_id: "guest",
+                  first_name: "Guest",
+                  last_name: "",
+                  email_id: "",
+                  role_id: "3",
+                };
+                sessionStorage.setItem("zcat_token", "guest");
+                onLogin(guestUser);
+              }}
+              className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[13px] font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              Skip Auth — Browse Icons
+            </button>
+            <p className="text-[10px] text-zinc-700 text-center mt-2">Auth will be set up later</p>
+          </div>
         </div>
       </div>
     </div>

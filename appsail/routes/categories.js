@@ -12,7 +12,7 @@ let nextCatId = 1;
 /**
  * GET /api/categories — List all categories with icon counts
  */
-router.get("/", requireAuth, async (req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
     if (IS_LOCAL) {
       return res.json(localCategories);

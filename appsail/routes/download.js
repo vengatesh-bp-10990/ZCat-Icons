@@ -12,7 +12,7 @@ const VALID_SIZES = [16, 24, 32, 48, 64, 80, 128, 256, 512];
  * GET /api/download/:iconId — Download icon as SVG
  * Query params: style, size, color
  */
-router.get("/:iconId", requireAuth, async (req, res, next) => {
+router.get("/:iconId", async (req, res, next) => {
   try {
     const { iconId } = req.params;
     const {

@@ -18,6 +18,12 @@ function App() {
     const storedToken = sessionStorage.getItem('zcat_token')
     if (storedUser && storedToken) {
       const parsed = JSON.parse(storedUser)
+      // Guest sessions don't need API validation
+      if (storedToken === 'guest' || storedToken === 'local-dev-token') {
+        setUser(parsed)
+        setLoading(false)
+        return
+      }
       // Validate session is still active
       fetch(`${API_BASE}/icons?page=1&limit=1`, {
         headers: { Authorization: storedToken ? `Zoho-oauthtoken ${storedToken}` : '' },

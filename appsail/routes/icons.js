@@ -29,7 +29,7 @@ function sanitize(str) {
 /**
  * GET /api/icons — List icons with pagination, search, category filter
  */
-router.get("/", requireAuth, async (req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
     const { page = 1, limit = 50, search, category_id, style } = req.query;
 
@@ -105,7 +105,7 @@ router.get("/", requireAuth, async (req, res, next) => {
 /**
  * GET /api/icons/:slug — Get single icon with all variants
  */
-router.get("/:slug", requireAuth, async (req, res, next) => {
+router.get("/:slug", async (req, res, next) => {
   try {
     const { slug } = req.params;
 

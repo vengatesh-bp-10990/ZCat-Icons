@@ -4,7 +4,7 @@
     {
       "name": "zcat-icons-api",
       "stack": "node18",
-      "src": "appsail",
+      "source": "appsail",
       "port": 3000,
       "memory": 512,
       "disk": 1024,

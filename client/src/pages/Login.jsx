@@ -8,42 +8,35 @@ export default function Login({ onLogin }) {
   const loginDivRef = useRef(null);
   const sdkInitialized = useRef(false);
 
-  // Production: Initialize Catalyst Web SDK login
+  // Production: Initialize Catalyst Web SDK login (SDK loaded globally via index.html)
   useEffect(() => {
     if (IS_LOCAL || sdkInitialized.current) return;
 
-    const script = document.createElement("script");
-    script.src = "https://static.zohocdn.com/catalyst/web-sdk/v2.0.0/catalystWebSDK.js";
-    script.async = true;
-    script.onload = () => {
-      try {
-        if (!window.catalyst) return;
-        const auth = window.catalyst.auth;
-        const loginDiv = document.getElementById("loginDivElement");
-        if (!loginDiv) return;
-
-        auth.signIn("loginDivElement", {
-          project_id: "20508000000125077",
-        });
-
-        sdkInitialized.current = true;
-
-        // Listen for auth success
-        auth.isUserAuthenticated().then((result) => {
-          if (result?.content) {
-            handleCatalystUser(result.content);
-          }
-        }).catch(() => {});
-      } catch (err) {
-        console.error("Catalyst SDK init error:", err);
-        setError("Failed to initialize authentication");
+    try {
+      if (!window.catalyst) {
+        setError("Authentication SDK not loaded");
+        return;
       }
-    };
-    document.head.appendChild(script);
+      const auth = window.catalyst.auth;
+      const loginDiv = document.getElementById("loginDivElement");
+      if (!loginDiv) return;
 
-    return () => {
-      if (script.parentNode) script.parentNode.removeChild(script);
-    };
+      auth.signIn("loginDivElement", {
+        project_id: "20508000000125077",
+      });
+
+      sdkInitialized.current = true;
+
+      // Check for existing auth session
+      auth.isUserAuthenticated().then((result) => {
+        if (result?.content) {
+          handleCatalystUser(result.content);
+        }
+      }).catch(() => {});
+    } catch (err) {
+      console.error("Catalyst SDK init error:", err);
+      setError("Failed to initialize authentication");
+    }
   }, []);
 
   const handleCatalystUser = async (userToken) => {

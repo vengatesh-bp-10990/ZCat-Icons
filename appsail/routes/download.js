@@ -1,6 +1,7 @@
 const express = require("express");
 const { requireAuth } = require("../middleware/auth");
 const { convertSvg, getMimeType } = require("../services/svgConverter");
+const { IS_LOCAL, localStore } = require("../localStore");
 
 const router = express.Router();
 const VARIANTS_TABLE = "IconVariants";
@@ -34,34 +35,51 @@ router.get("/:iconId", requireAuth, async (req, res, next) => {
     }
 
     // Fetch icon name for filename
-    const zcql = req.catalyst.zcql();
-    const iconResult = await zcql.executeZCQLQuery(
-      `SELECT name, slug FROM ${ICONS_TABLE} WHERE ROWID = ${iconId}`
-    );
-    if (!iconResult.length) {
-      return res.status(404).json({ error: "Icon not found" });
+    let icon, svgCode;
+
+    if (IS_LOCAL) {
+      icon = localStore.icons.find((i) => String(i.ROWID) === String(iconId));
+      if (!icon) {
+        return res.status(404).json({ error: "Icon not found" });
+      }
+      const variant = localStore.variants.find(
+        (v) => String(v.icon_id) === String(iconId) && v.style === style
+      );
+      if (!variant) {
+        return res.status(404).json({ error: `No ${style} variant found` });
+      }
+      svgCode = variant.svg_code;
+    } else {
+      const zcql = req.catalyst.zcql();
+      const iconResult = await zcql.executeZCQLQuery(
+        `SELECT name, slug FROM ${ICONS_TABLE} WHERE ROWID = ${iconId}`
+      );
+      if (!iconResult.length) {
+        return res.status(404).json({ error: "Icon not found" });
+      }
+      icon = iconResult[0][ICONS_TABLE] || iconResult[0];
+
+      const variantResult = await zcql.executeZCQLQuery(
+        `SELECT svg_code FROM ${VARIANTS_TABLE} WHERE icon_id = ${iconId} AND style = '${style}'`
+      );
+      if (!variantResult.length) {
+        return res.status(404).json({ error: `No ${style} variant found` });
+      }
+      svgCode = (variantResult[0][VARIANTS_TABLE] || variantResult[0]).svg_code;
     }
-    const icon = iconResult[0][ICONS_TABLE] || iconResult[0];
 
-    // Fetch the variant SVG
-    const variantResult = await zcql.executeZCQLQuery(
-      `SELECT svg_code FROM ${VARIANTS_TABLE} WHERE icon_id = ${iconId} AND style = '${style}'`
-    );
-    if (!variantResult.length) {
-      return res.status(404).json({ error: `No ${style} variant found` });
-    }
-    const svgCode = (variantResult[0][VARIANTS_TABLE] || variantResult[0]).svg_code;
+    const filename = `${icon.slug}-${style}`;
 
-    const filename = `${icon.slug}-${style}-${sizeNum}`;
-
-    // Return SVG directly
+    // Return SVG directly — viewBox stays 0 0 24 24, width/height set to requested size
     if (format === "svg") {
       let svg = svgCode;
       if (color) {
         svg = svg.replace(/stroke="[^"]*"/g, `stroke="${color}"`);
         svg = svg.replace(/fill="(?!none)[^"]*"/g, `fill="${color}"`);
       }
-      // Add width/height for download
+      // Set width/height to requested size
+      svg = svg.replace(/ width="[^"]*"/g, "");
+      svg = svg.replace(/ height="[^"]*"/g, "");
       svg = svg.replace(/<svg/, `<svg width="${sizeNum}" height="${sizeNum}"`);
 
       res.setHeader("Content-Type", "image/svg+xml");
@@ -69,7 +87,7 @@ router.get("/:iconId", requireAuth, async (req, res, next) => {
       return res.send(svg);
     }
 
-    // Convert to raster format
+    // Convert to raster format (size applies here)
     const buffer = await convertSvg(svgCode, {
       format,
       size: sizeNum,

@@ -5,7 +5,7 @@ const cheerio = require("cheerio");
 const CANONICAL = {
   viewBox: "0 0 24 24",
   fill: "none",
-  stroke: "#343C54",
+  color: "#343C54",
   strokeWidth: "1.5",
   strokeLinecap: "round",
   strokeLinejoin: "round",
@@ -15,20 +15,77 @@ const CANONICAL = {
 const MAX_PATH_LENGTH = 5000;
 const MAX_PATH_COUNT = 50;
 
+// SVGO config that preserves important attributes
+const SVGO_SAFE = {
+  multipass: true,
+  plugins: [
+    {
+      name: "preset-default",
+      params: {
+        overrides: {
+          removeUselessStrokeAndFill: false,
+          convertShapeToPath: false,
+          moveElemsAttrsToGroup: false,
+          moveGroupAttrsToElems: false,
+          collapseGroups: false,
+        },
+      },
+    },
+  ],
+};
+
 /**
- * Normalize any SVG to our canonical stroke-based style (24x24).
- * - Fill-based → converted to stroke outlines
- * - Wrong viewBox → normalized to 0 0 24 24
- * - Wrong stroke-width → normalized to 1.5
- * - Illustrations (too complex) → rejected
+ * Detect whether SVG is primarily stroke-based or fill-based.
+ */
+function detectType(svgString) {
+  const $ = cheerio.load(svgString, { xmlMode: true });
+  const shapes = $("path, circle, rect, line, polyline, polygon, ellipse");
+
+  let fillCount = 0;
+  let strokeCount = 0;
+
+  shapes.each((_, el) => {
+    const fill = $(el).attr("fill");
+    const stroke = $(el).attr("stroke");
+    const strokeWidth = $(el).attr("stroke-width");
+
+    if (stroke && stroke !== "none") strokeCount++;
+    if (strokeWidth) strokeCount++;
+    if (fill && fill !== "none") fillCount++;
+  });
+
+  // Also check root <svg> for stroke attributes (some icons put stroke on root)
+  const $svg = $("svg");
+  if ($svg.attr("stroke") && $svg.attr("stroke") !== "none") strokeCount += 2;
+
+  return strokeCount > fillCount ? "stroke" : "fill";
+}
+
+/**
+ * Normalize any SVG to our canonical style (24x24).
+ * Returns { svg, type } where type is "stroke" or "fill".
+ *
+ * Stroke-based: normalizes stroke color, width, linecap, linejoin.
+ * Fill-based: normalizes fill color, preserves fill-rule, clip-rule, opacity.
  */
 function normalizeSvg(svgString) {
-  // Step 1: Optimize with SVGO first
+  const type = detectType(svgString);
+
+  // Step 1: Initial SVGO pass
   const optimized = optimize(svgString, {
     multipass: true,
     plugins: [
-      "preset-default",
-      "removeDimensions",
+      {
+        name: "preset-default",
+        params: {
+          overrides: {
+            removeUselessStrokeAndFill: false,
+            moveElemsAttrsToGroup: false,
+            moveGroupAttrsToElems: false,
+            collapseGroups: false,
+          },
+        },
+      },
       { name: "removeAttrs", params: { attrs: ["class", "style", "data-*"] } },
     ],
   });
@@ -38,10 +95,10 @@ function normalizeSvg(svgString) {
   const $svg = $("svg");
 
   // Step 2: Validate complexity — reject illustrations
-  const paths = $("path, circle, rect, line, polyline, polygon, ellipse");
-  if (paths.length > MAX_PATH_COUNT) {
+  const shapes = $("path, circle, rect, line, polyline, polygon, ellipse");
+  if (shapes.length > MAX_PATH_COUNT) {
     throw new Error(
-      `SVG too complex (${paths.length} shapes). Max ${MAX_PATH_COUNT} allowed. Icons only, not illustrations.`
+      `SVG too complex (${shapes.length} shapes). Max ${MAX_PATH_COUNT} allowed.`
     );
   }
 
@@ -56,7 +113,7 @@ function normalizeSvg(svgString) {
     );
   }
 
-  // Step 3: Normalize viewBox
+  // Step 3: Normalize root <svg> attributes
   $svg.attr("viewBox", CANONICAL.viewBox);
   $svg.removeAttr("width");
   $svg.removeAttr("height");
@@ -66,124 +123,99 @@ function normalizeSvg(svgString) {
   $svg.removeAttr("class");
   $svg.removeAttr("style");
 
-  // Step 4: Detect if fill-based or stroke-based
-  const isFillBased = detectFillBased($, paths);
-
-  if (isFillBased) {
-    // Convert fill-based to stroke-based
-    convertFillToStroke($, paths);
+  if (type === "stroke") {
+    normalizeStrokeSvg($, $svg, shapes);
   } else {
-    // Already stroke-based — normalize attributes
-    normalizeStrokeAttributes($, paths);
+    normalizeFillSvg($, $svg, shapes);
   }
 
-  // Step 5: Remove any remaining unwanted attributes
+  // Clean up all elements
   $svg.find("*").each((_, el) => {
     $(el).removeAttr("class");
     $(el).removeAttr("style");
     $(el).removeAttr("id");
   });
 
-  // Step 6: Final SVGO pass
-  const finalOptimized = optimize($.xml($svg), {
-    multipass: true,
-    plugins: ["preset-default", "removeDimensions"],
-  });
-
-  return finalOptimized.data;
+  // Final SVGO pass
+  const finalOptimized = optimize($.xml($svg), SVGO_SAFE);
+  return { svg: finalOptimized.data, type };
 }
 
 /**
- * Detect if SVG is primarily fill-based
+ * Normalize stroke-based SVG:
+ * - Move stroke attrs from <svg> root to individual shapes
+ * - Normalize stroke color, width, linecap, linejoin
+ * - Ensure fill="none" on shapes
  */
-function detectFillBased($, paths) {
-  let fillCount = 0;
-  let strokeCount = 0;
+function normalizeStrokeSvg($, $svg, shapes) {
+  // Some SVGs put stroke attributes on root — capture and remove them
+  const rootStroke = $svg.attr("stroke");
+  $svg.removeAttr("stroke");
+  $svg.removeAttr("stroke-width");
+  $svg.removeAttr("stroke-linecap");
+  $svg.removeAttr("stroke-linejoin");
 
-  paths.each((_, el) => {
-    const fill = $(el).attr("fill");
-    const stroke = $(el).attr("stroke");
-    const strokeWidth = $(el).attr("stroke-width");
-
-    if (fill && fill !== "none") fillCount++;
-    if (stroke && stroke !== "none") strokeCount++;
-    if (strokeWidth) strokeCount++;
-  });
-
-  return fillCount > strokeCount;
-}
-
-/**
- * Convert fill-based paths to stroke-based outlines
- */
-function convertFillToStroke($, paths) {
-  paths.each((_, el) => {
+  shapes.each((_, el) => {
     const $el = $(el);
-    const tagName = el.tagName || el.name;
+    const stroke = $el.attr("stroke") || rootStroke;
 
-    // Remove fill, add stroke
-    $el.removeAttr("fill");
-    $el.removeAttr("fill-rule");
-    $el.removeAttr("clip-rule");
-    $el.removeAttr("fill-opacity");
+    // Set canonical stroke attributes on each shape
+    if (stroke && stroke !== "none") {
+      $el.attr("stroke", CANONICAL.color);
+    } else {
+      // Shape without explicit stroke inherits from root — add it
+      $el.attr("stroke", CANONICAL.color);
+    }
 
-    $el.attr("stroke", CANONICAL.stroke);
     $el.attr("stroke-width", CANONICAL.strokeWidth);
     $el.attr("stroke-linecap", CANONICAL.strokeLinecap);
     $el.attr("stroke-linejoin", CANONICAL.strokeLinejoin);
-    $el.attr("fill", "none");
 
-    // Handle opacity groups — remove wrapper, keep children
-    if (tagName === "g") {
-      $el.removeAttr("opacity");
+    // Ensure fill is none for stroke icons
+    const fill = $el.attr("fill");
+    if (!fill || fill === "none" || fill === CANONICAL.fill) {
+      $el.attr("fill", "none");
     }
-  });
-
-  // Also handle <g> wrappers
-  $("g").each((_, el) => {
-    $(el).removeAttr("opacity");
-    $(el).removeAttr("fill");
+    // Remove fill-rule/clip-rule (not needed for stroke icons)
+    $el.removeAttr("fill-rule");
+    $el.removeAttr("clip-rule");
   });
 }
 
 /**
- * Normalize existing stroke attributes to canonical values
+ * Normalize fill-based SVG:
+ * - Normalize fill color to canonical
+ * - Preserve fill-rule, clip-rule, opacity
+ * - Remove stroke attributes
  */
-function normalizeStrokeAttributes($, paths) {
-  paths.each((_, el) => {
+function normalizeFillSvg($, $svg, shapes) {
+  // Remove root stroke attributes if any
+  $svg.removeAttr("stroke");
+  $svg.removeAttr("stroke-width");
+  $svg.removeAttr("stroke-linecap");
+  $svg.removeAttr("stroke-linejoin");
+
+  shapes.each((_, el) => {
     const $el = $(el);
-    const stroke = $el.attr("stroke");
+
+    // Normalize fill color
     const fill = $el.attr("fill");
-
-    // Normalize stroke color to canonical
-    if (stroke && stroke !== "none") {
-      $el.attr("stroke", CANONICAL.stroke);
-    }
-
-    // Normalize stroke-width
-    if ($el.attr("stroke-width")) {
-      $el.attr("stroke-width", CANONICAL.strokeWidth);
-    }
-
-    // Ensure round caps and joins
-    if ($el.attr("stroke-linecap")) {
-      $el.attr("stroke-linecap", CANONICAL.strokeLinecap);
-    }
-    if ($el.attr("stroke-linejoin")) {
-      $el.attr("stroke-linejoin", CANONICAL.strokeLinejoin);
-    }
-
-    // If element has fill that isn't "none", make it "none" for stroke style
     if (fill && fill !== "none") {
-      $el.attr("fill", "none");
-      // Add stroke if missing
-      if (!stroke) {
-        $el.attr("stroke", CANONICAL.stroke);
-        $el.attr("stroke-width", CANONICAL.strokeWidth);
-        $el.attr("stroke-linecap", CANONICAL.strokeLinecap);
-        $el.attr("stroke-linejoin", CANONICAL.strokeLinejoin);
-      }
+      $el.attr("fill", CANONICAL.color);
     }
+
+    // Remove stroke attributes (pure fill icon)
+    $el.removeAttr("stroke");
+    $el.removeAttr("stroke-width");
+    $el.removeAttr("stroke-linecap");
+    $el.removeAttr("stroke-linejoin");
+  });
+
+  // Normalize <g> groups
+  $("g").each((_, el) => {
+    $(el).removeAttr("class");
+    $(el).removeAttr("style");
+    $(el).removeAttr("id");
   });
 }
 

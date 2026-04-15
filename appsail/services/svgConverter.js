@@ -13,6 +13,8 @@ async function convertSvg(svgString, { format = "png", size = 24, color }) {
   }
 
   // Set dimensions on SVG for sharp
+  svg = svg.replace(/ width="[^"]*"/g, "");
+  svg = svg.replace(/ height="[^"]*"/g, "");
   svg = svg.replace(
     /<svg/,
     `<svg width="${size}" height="${size}"`

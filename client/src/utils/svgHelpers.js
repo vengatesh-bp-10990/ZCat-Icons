@@ -11,8 +11,9 @@ export function transformSvg(svgString, { color, size, rotate } = {}) {
 
   if (size) {
     // Remove existing width/height, add new ones
-    svg = svg.replace(/\s*width="[^"]*"/g, "");
-    svg = svg.replace(/\s*height="[^"]*"/g, "");
+    // Use leading space to avoid matching stroke-width, stroke-height etc.
+    svg = svg.replace(/ width="[^"]*"/g, "");
+    svg = svg.replace(/ height="[^"]*"/g, "");
     svg = svg.replace(/<svg/, `<svg width="${size}" height="${size}"`);
   }
 

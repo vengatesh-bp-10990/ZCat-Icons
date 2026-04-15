@@ -1,3 +1,5 @@
+// In production (Slate), API calls go to the same origin (AppSail serves both)
+// In dev, Vite proxy forwards /api to localhost:3000
 const API_BASE = "/api";
 
 async function getAuthHeaders() {
@@ -27,9 +29,10 @@ export async function fetchIcon(slug) {
   return res.json();
 }
 
-export async function uploadIcon(formData) {
+export async function uploadIcon(formData, { skipAI = false } = {}) {
   const token = sessionStorage.getItem("zcat_token");
-  const res = await fetch(`${API_BASE}/icons/upload`, {
+  const url = skipAI ? `${API_BASE}/icons/upload?skip_ai=true` : `${API_BASE}/icons/upload`;
+  const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: token ? `Zoho-oauthtoken ${token}` : "" },
     body: formData,
@@ -37,6 +40,20 @@ export async function uploadIcon(formData) {
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || "Upload failed");
+  }
+  return res.json();
+}
+
+export async function analyzeIcon(formData) {
+  const token = sessionStorage.getItem("zcat_token");
+  const res = await fetch(`${API_BASE}/icons/analyze`, {
+    method: "POST",
+    headers: { Authorization: token ? `Zoho-oauthtoken ${token}` : "" },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Analysis failed");
   }
   return res.json();
 }
@@ -66,6 +83,27 @@ export async function createCategory(name) {
     body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error("Failed to create category");
+  return res.json();
+}
+
+export async function deleteCategory(id) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/categories/${id}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) throw new Error("Failed to delete category");
+  return res.json();
+}
+
+export async function updateIcon(id, data) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/icons/${id}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update icon");
   return res.json();
 }
 

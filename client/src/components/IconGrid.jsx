@@ -6,31 +6,31 @@ export default function IconGrid({ icons, onSelect }) {
       const fullIcon = await fetchIcon(icon.slug);
       onSelect(fullIcon);
     } catch {
-      // Fallback: open with basic info
       onSelect(icon);
     }
   };
 
   return (
-    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-1">
+    <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-8 xl:grid-cols-10 gap-px bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-800/50">
       {icons.map((icon) => (
         <button
           key={icon.ROWID}
           onClick={() => handleClick(icon)}
-          className="group flex flex-col items-center justify-center p-4 rounded-xl border border-transparent hover:border-zinc-700 hover:bg-[#1a1a2e] transition-all"
+          className="group flex flex-col items-center justify-center bg-zinc-950 p-3 hover:bg-zinc-900 aspect-square relative"
+          title={icon.name}
         >
-          {/* Icon Preview */}
           <div
-            className="w-8 h-8 mb-2 flex items-center justify-center text-zinc-300 group-hover:text-white transition-colors"
+            className="w-6 h-6 text-zinc-400 group-hover:text-zinc-100 flex items-center justify-center"
             dangerouslySetInnerHTML={{
               __html: (icon.variant?.svg_code || icon.variants?.[0]?.svg_code || "")
-                .replace(/width="[^"]*"/g, 'width="32"')
-                .replace(/height="[^"]*"/g, 'height="32"')
-                .replace(/stroke="#[^"]*"/g, 'stroke="currentColor"'),
+                .replace(/ width="[^"]*"/g, "")
+                .replace(/ height="[^"]*"/g, "")
+                .replace(/<svg/, '<svg width="24" height="24"')
+                .replace(/stroke="#[^"]*"/g, 'stroke="currentColor"')
+                .replace(/fill="(?!none)[^"]*"/g, 'fill="currentColor"'),
             }}
           />
-          {/* Name */}
-          <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400 truncate max-w-full transition-colors">
+          <span className="text-[9px] text-zinc-700 group-hover:text-zinc-500 truncate max-w-full mt-1.5 leading-tight">
             {icon.name}
           </span>
         </button>

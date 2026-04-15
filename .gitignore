@@ -2,4 +2,14 @@ node_modules/
 .env
 .DS_Store
 dist/
+client/dist/
+appsail/public/
 *.log
+npm-debug.log*
+.catalyst/
+.build/
+.vscode/
+.idea/
+*.swp
+scripts/output/
+Thumbs.db

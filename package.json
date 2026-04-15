@@ -1,0 +1,15 @@
+{
+  "name": "zcat-icons",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZCat Icons — Stroke Icon Library on Zoho Catalyst",
+  "scripts": {
+    "dev:api": "cd appsail && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "dev": "npm run dev:api & npm run dev:client",
+    "build:client": "cd client && npm run build",
+    "build:deploy": "npm run build:client && rm -rf appsail/public && cp -r client/dist appsail/public",
+    "predeploy": "npm run build:deploy",
+    "install:all": "cd appsail && npm install && cd ../client && npm install"
+  }
+}

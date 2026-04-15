@@ -1,6 +1,7 @@
-// In production (Slate), API calls go to the same origin (AppSail serves both)
+// In production (Slate), API calls go to the AppSail URL
 // In dev, Vite proxy forwards /api to localhost:3000
-const API_BASE = "/api";
+const APPSAIL_URL = "https://zcat-icons-api-50041188332.development.catalystappsail.in";
+const API_BASE = import.meta.env.DEV ? "/api" : `${APPSAIL_URL}/api`;
 
 async function getAuthHeaders() {
   const token = sessionStorage.getItem("zcat_token");

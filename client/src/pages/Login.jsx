@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 
 const IS_LOCAL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+const APPSAIL_URL = "https://zcat-icons-api-50041188332.development.catalystappsail.in";
+const API_BASE = IS_LOCAL ? "/api" : `${APPSAIL_URL}/api`;
 
 export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false);
@@ -42,7 +44,7 @@ export default function Login({ onLogin }) {
   const handleCatalystUser = async (userToken) => {
     try {
       // Fetch current user info from our backend
-      const res = await fetch("/api/icons?page=1&limit=1", {
+      const res = await fetch(`${API_BASE}/icons?page=1&limit=1`, {
         headers: { Authorization: `Zoho-oauthtoken ${userToken}` },
       });
       if (res.ok) {

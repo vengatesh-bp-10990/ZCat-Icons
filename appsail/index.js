@@ -1,8 +1,13 @@
-require("dotenv").config({ path: require("path").join(__dirname, ".env") });
+try { require("dotenv").config({ path: require("path").join(__dirname, ".env") }); } catch(e) { /* dotenv optional */ }
 const express = require("express");
 const cors = require("cors");
 const catalyst = require("zcatalyst-sdk-node");
 const path = require("path");
+
+// Catch startup crashes
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL]", err.message, err.stack);
+});
 
 const iconsRouter = require("./routes/icons");
 const categoriesRouter = require("./routes/categories");

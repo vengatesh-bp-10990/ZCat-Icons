@@ -1,35 +1,28 @@
 const express = require("express");
 const { requireAuth } = require("../middleware/auth");
-const { convertSvg, getMimeType } = require("../services/svgConverter");
 const { IS_LOCAL, localStore } = require("../localStore");
 
 const router = express.Router();
 const VARIANTS_TABLE = "IconVariants";
 const ICONS_TABLE = "Icons";
 
-const VALID_FORMATS = ["svg", "png", "jpeg", "jpg", "gif", "webp"];
 const VALID_SIZES = [16, 24, 32, 48, 64, 80, 128, 256, 512];
 
 /**
- * GET /api/download/:iconId — Download icon in specified format/style/size
- * Query params: style, format, size, color
+ * GET /api/download/:iconId — Download icon as SVG
+ * Query params: style, size, color
  */
 router.get("/:iconId", requireAuth, async (req, res, next) => {
   try {
     const { iconId } = req.params;
     const {
       style = "outlined",
-      format = "svg",
-      size = "24",
+      size = "16",
       color,
     } = req.query;
 
     const sizeNum = parseInt(size);
 
-    // Validate params
-    if (!VALID_FORMATS.includes(format)) {
-      return res.status(400).json({ error: `Invalid format. Use: ${VALID_FORMATS.join(", ")}` });
-    }
     if (!VALID_SIZES.includes(sizeNum)) {
       return res.status(400).json({ error: `Invalid size. Use: ${VALID_SIZES.join(", ")}` });
     }
@@ -70,36 +63,19 @@ router.get("/:iconId", requireAuth, async (req, res, next) => {
 
     const filename = `${icon.slug}-${style}`;
 
-    // Return SVG directly — viewBox stays 0 0 24 24, width/height set to requested size
-    if (format === "svg") {
-      let svg = svgCode;
-      if (color) {
-        svg = svg.replace(/stroke="[^"]*"/g, `stroke="${color}"`);
-        svg = svg.replace(/fill="(?!none)[^"]*"/g, `fill="${color}"`);
-      }
-      // Set width/height to requested size
-      svg = svg.replace(/ width="[^"]*"/g, "");
-      svg = svg.replace(/ height="[^"]*"/g, "");
-      svg = svg.replace(/<svg/, `<svg width="${sizeNum}" height="${sizeNum}"`);
-
-      res.setHeader("Content-Type", "image/svg+xml");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}.svg"`);
-      return res.send(svg);
+    // Return SVG with optional color override and size
+    let svg = svgCode;
+    if (color) {
+      svg = svg.replace(/stroke="[^"]*"/g, `stroke="${color}"`);
+      svg = svg.replace(/fill="(?!none)[^"]*"/g, `fill="${color}"`);
     }
+    svg = svg.replace(/ width="[^"]*"/g, "");
+    svg = svg.replace(/ height="[^"]*"/g, "");
+    svg = svg.replace(/<svg/, `<svg width="${sizeNum}" height="${sizeNum}"`);
 
-    // Convert to raster format (size applies here)
-    const buffer = await convertSvg(svgCode, {
-      format,
-      size: sizeNum,
-      color,
-    });
-
-    res.setHeader("Content-Type", getMimeType(format));
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${filename}.${format}"`
-    );
-    res.send(buffer);
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}.svg"`);
+    return res.send(svg);
   } catch (err) {
     next(err);
   }

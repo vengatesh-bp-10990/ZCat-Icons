@@ -1,12 +1,12 @@
 const { optimize } = require("svgo");
 const cheerio = require("cheerio");
 
-// Canonical style rules
+// Canonical style rules — matches ZCatalyst Design System (Figma)
 const CANONICAL = {
-  viewBox: "0 0 24 24",
+  viewBox: "0 0 16 16",
   fill: "none",
-  color: "#343C54",
-  strokeWidth: "1.5",
+  color: "#101F3E",
+  strokeWidth: "1.3",
   strokeLinecap: "round",
   strokeLinejoin: "round",
 };

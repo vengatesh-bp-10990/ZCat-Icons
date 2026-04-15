@@ -4,7 +4,7 @@
   "stack": "node18",
   "env_variables": {
     "NODE_ENV": "production",
-    "ALLOWED_ORIGINS": "https://zcat-icons-api-50041188332.development.catalystappsail.in,https://designers-icons-60047187339.development.catalystserverless.com"
+    "ALLOWED_ORIGINS": "https://zcat-icons.onslate.in,https://zcat-icons-api-50041188332.development.catalystappsail.in"
   },
   "memory": 512
 }

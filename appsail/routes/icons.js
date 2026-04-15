@@ -2,8 +2,6 @@ const express = require("express");
 const multer = require("multer");
 const { requireAuth, requireAdmin } = require("../middleware/auth");
 const { normalizeSvg } = require("../services/normalizer");
-const { generateVariants } = require("../services/variantGenerator");
-const { rewriteSvgWithAI, suggestMetadata } = require("../services/aiRewriter");
 
 const { IS_LOCAL, localStore } = require("../localStore");
 
@@ -27,108 +25,6 @@ function sanitize(str) {
     .replace(/\*\//g, "")
     .slice(0, 200); // limit length
 }
-
-/**
- * POST /api/icons/analyze — AI analyzes an SVG, suggests metadata, checks duplicates
- */
-router.post(
-  "/analyze",
-  requireAuth,
-  requireAdmin,
-  upload.single("file"),
-  async (req, res, next) => {
-    try {
-      if (!req.file) return res.status(400).json({ error: "SVG file is required" });
-      const svgString = req.file.buffer.toString("utf-8");
-
-      // Get existing categories
-      let categoryNames = [];
-      if (IS_LOCAL) {
-        // No categories in local store yet, pass empty
-      } else {
-        try {
-          const zcql = req.catalyst.zcql();
-          const catResult = await zcql.executeZCQLQuery("SELECT name FROM Categories");
-          categoryNames = catResult.map((r) => r.Categories?.name || r.name).filter(Boolean);
-        } catch {}
-      }
-
-      // Run AI metadata & SVG rewrite in parallel
-      const filename = req.file.originalname || "";
-      const [metadata, rewrittenSvg] = await Promise.allSettled([
-        suggestMetadata(svgString, categoryNames, filename),
-        rewriteSvgWithAI(svgString),
-      ]);
-
-      const suggestion = metadata.status === "fulfilled" ? metadata.value : null;
-      const processedSvg = rewrittenSvg.status === "fulfilled" ? rewrittenSvg.value : null;
-
-      // Check for duplicate icons by suggested name
-      let duplicates = [];
-      const suggestedName = suggestion?.name || "";
-      if (suggestedName) {
-        if (IS_LOCAL) {
-          duplicates = localStore.icons
-            .filter((i) => {
-              const a = i.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-              const b = suggestedName.toLowerCase().replace(/[^a-z0-9]/g, "");
-              return a === b || a.includes(b) || b.includes(a);
-            })
-            .map((i) => {
-              const variant = localStore.variants.find(
-                (v) => v.icon_id === i.ROWID && v.style === "outlined"
-              );
-              return { ROWID: i.ROWID, name: i.name, slug: i.slug, svg_code: variant?.svg_code || "" };
-            });
-        } else {
-          try {
-            const zcql = req.catalyst.zcql();
-            const searchTerm = sanitize(suggestedName.replace(/-/g, "%"));
-            const dupResult = await zcql.executeZCQLQuery(
-              `SELECT * FROM ${ICONS_TABLE} WHERE name LIKE '%${searchTerm}%' OR slug LIKE '%${searchTerm}%'`
-            );
-            const dupIcons = dupResult.map((r) => r[ICONS_TABLE] || r);
-            for (const dup of dupIcons) {
-              const varResult = await zcql.executeZCQLQuery(
-                `SELECT svg_code FROM ${VARIANTS_TABLE} WHERE icon_id = ${dup.ROWID} AND style = 'outlined' LIMIT 1`
-              );
-              const svgCode = varResult[0]?.[VARIANTS_TABLE]?.svg_code || varResult[0]?.svg_code || "";
-              duplicates.push({ ROWID: dup.ROWID, name: dup.name, slug: dup.slug, svg_code: svgCode });
-            }
-          } catch {}
-        }
-      }
-
-      // Also search by tags for broader duplicate check
-      if (suggestion?.tags?.length && duplicates.length === 0) {
-        if (IS_LOCAL) {
-          const tagSet = new Set(suggestion.tags.map((t) => t.toLowerCase()));
-          duplicates = localStore.icons
-            .filter((i) => {
-              const iconTags = (i.tags || "").toLowerCase().split(",").map((t) => t.trim());
-              const overlap = iconTags.filter((t) => tagSet.has(t));
-              return overlap.length >= 2;
-            })
-            .map((i) => {
-              const variant = localStore.variants.find(
-                (v) => v.icon_id === i.ROWID && v.style === "outlined"
-              );
-              return { ROWID: i.ROWID, name: i.name, slug: i.slug, svg_code: variant?.svg_code || "" };
-            });
-        }
-      }
-
-      res.json({
-        suggestion,
-        processedSvg,
-        duplicates,
-        originalSvg: svgString,
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-);
 
 /**
  * GET /api/icons — List icons with pagination, search, category filter
@@ -245,7 +141,7 @@ router.get("/:slug", requireAuth, async (req, res, next) => {
 });
 
 /**
- * POST /api/icons/upload — Upload SVG, normalize, generate variants, store
+ * POST /api/icons/upload — Upload SVG, normalize, store (stroke only)
  * Admin only. Accepts multipart form with: file (SVG), name, category_id, tags
  */
 router.post(
@@ -261,47 +157,26 @@ router.post(
 
       const svgString = req.file.buffer.toString("utf-8");
       const { name, category_id, tags } = req.body;
-      const skipAI = req.query.skip_ai === "true";
 
       if (!name) {
         return res.status(400).json({ error: "Icon name is required" });
       }
 
-      // Step 1: Normalize the SVG (AI rewrite or basic normalization)
+      // Normalize the SVG to canonical style
       let normalizedSvg;
-      if (skipAI) {
-        // User chose to upload original — basic normalization only
-        try {
-          const normalized = normalizeSvg(svgString);
-          normalizedSvg = normalized.svg;
-        } catch (normalizeErr) {
-          // If basic normalizer also fails, use SVG as-is
-          normalizedSvg = svgString;
-        }
-      } else {
-        try {
-          normalizedSvg = await rewriteSvgWithAI(svgString);
-        } catch (aiErr) {
-          console.error("[Upload] AI rewrite failed, falling back to basic normalizer:", aiErr.message);
-          try {
-            const normalized = normalizeSvg(svgString);
-            normalizedSvg = normalized.svg;
-          } catch (normalizeErr) {
-            return res.status(400).json({
-              error: `SVG processing failed: ${normalizeErr.message}`,
-            });
-          }
-        }
+      try {
+        const normalized = normalizeSvg(svgString);
+        normalizedSvg = normalized.svg;
+      } catch (normalizeErr) {
+        // If normalizer fails, use SVG as-is
+        normalizedSvg = svgString;
       }
 
-      // Step 2: Generate slug
+      // Generate slug
       const slug = name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
-
-      // Step 3: Generate variants (outlined only for now)
-      const variants = generateVariants(normalizedSvg, "stroke");
 
       // LOCAL DEV: store in memory
       if (IS_LOCAL) {
@@ -317,24 +192,20 @@ router.post(
         };
         localStore.icons.push(iconRecord);
 
-        const savedVariants = [];
-        for (const [style, svgCode] of Object.entries(variants)) {
-          const variantId = String(localStore.nextId++);
-          const variant = {
-            ROWID: variantId,
-            icon_id: iconId,
-            style,
-            svg_code: svgCode,
-            stratus_url: "",
-          };
-          localStore.variants.push(variant);
-          savedVariants.push({ style, ROWID: variantId, stratus_url: "" });
-        }
+        const variantId = String(localStore.nextId++);
+        const variant = {
+          ROWID: variantId,
+          icon_id: iconId,
+          style: "outlined",
+          svg_code: normalizedSvg,
+          stratus_url: "",
+        };
+        localStore.variants.push(variant);
 
         return res.status(201).json({
-          message: "Icon uploaded and processed successfully",
+          message: "Icon uploaded successfully",
           icon: { ROWID: iconId, name, slug },
-          variants: savedVariants,
+          variants: [{ style: "outlined", ROWID: variantId, stratus_url: "" }],
         });
       }
 
@@ -353,44 +224,33 @@ router.post(
 
       const iconId = iconRecord.ROWID;
 
-      // Step 5: Store variants in Stratus + DataStore
+      // Store SVG in Stratus + DataStore
       const stratus = req.catalyst.stratus();
       const bucket = stratus.bucket(BUCKET_NAME);
       const variantsTable = datastore.table(VARIANTS_TABLE);
-      const savedVariants = [];
 
-      for (const [style, svgCode] of Object.entries(variants)) {
-        // Upload to Stratus
-        const objectPath = `icons/${slug}/${style}.svg`;
-        let stratusUrl = "";
+      const objectPath = `icons/${slug}/outlined.svg`;
+      let stratusUrl = "";
 
-        try {
-          const uploaded = await bucket.putObject({
-            path: objectPath,
-            data: Buffer.from(svgCode),
-            contentType: "image/svg+xml",
-          });
-          stratusUrl = uploaded.url || "";
-        } catch (stratusErr) {
-          console.error(`Stratus upload failed for ${style}:`, stratusErr.message);
-        }
-
-        // Save variant to DataStore
-        const variantRecord = await variantsTable.insertRow({
-          icon_id: iconId,
-          style,
-          svg_code: svgCode,
-          stratus_url: stratusUrl,
+      try {
+        const uploaded = await bucket.putObject({
+          path: objectPath,
+          data: Buffer.from(normalizedSvg),
+          contentType: "image/svg+xml",
         });
-
-        savedVariants.push({
-          style,
-          ROWID: variantRecord.ROWID,
-          stratus_url: stratusUrl,
-        });
+        stratusUrl = uploaded.url || "";
+      } catch (stratusErr) {
+        console.error(`Stratus upload failed:`, stratusErr.message);
       }
 
-      // Step 6: Update category icon count
+      const variantRecord = await variantsTable.insertRow({
+        icon_id: iconId,
+        style: "outlined",
+        svg_code: normalizedSvg,
+        stratus_url: stratusUrl,
+      });
+
+      // Update category icon count
       if (category_id) {
         try {
           const zcql = req.catalyst.zcql();
@@ -413,9 +273,9 @@ router.post(
       }
 
       res.status(201).json({
-        message: "Icon uploaded and processed successfully",
+        message: "Icon uploaded successfully",
         icon: { ROWID: iconId, name, slug },
-        variants: savedVariants,
+        variants: [{ style: "outlined", ROWID: variantRecord.ROWID, stratus_url: stratusUrl }],
       });
     } catch (err) {
       next(err);

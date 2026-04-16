@@ -10,7 +10,10 @@ const path = require("path");
 const http = require("http");
 
 const SVG_DIR = "/tmp/figma_svgs";
-const API_BASE = "http://127.0.0.1:3000";
+const API_BASE = process.env.API_URL || "http://127.0.0.1:3000";
+const IMPORT_KEY = "zcat-import-2026";
+const IS_HTTPS = API_BASE.startsWith("https");
+const httpModule = IS_HTTPS ? require("https") : require("http");
 
 // Category mapping — maps icon name patterns to categories
 const CATEGORY_MAP = [
@@ -84,16 +87,18 @@ function httpRequest(method, urlPath, body) {
     const url = new URL(urlPath, API_BASE);
     const options = {
       hostname: url.hostname,
-      port: url.port,
+      port: url.port || (IS_HTTPS ? 443 : 80),
       path: url.pathname + url.search,
       method,
-      headers: {},
+      headers: {
+        "x-import-key": IMPORT_KEY,
+      },
     };
 
     const jsonBody = JSON.stringify(body);
     options.headers["Content-Type"] = "application/json";
     options.headers["Content-Length"] = Buffer.byteLength(jsonBody);
-    const req = http.request(options, (res) => {
+    const req = httpModule.request(options, (res) => {
       let data = "";
       res.on("data", (c) => (data += c));
       res.on("end", () => {
@@ -124,19 +129,21 @@ function uploadIcon(name, svgContent, categoryId, tags) {
     parts.push(`--${boundary}--`);
 
     const body = parts.join("\r\n");
+    const url = new URL("/api/icons/upload", API_BASE);
 
     const options = {
-      hostname: "127.0.0.1",
-      port: 3000,
-      path: "/api/icons/upload",
+      hostname: url.hostname,
+      port: url.port || (IS_HTTPS ? 443 : 80),
+      path: url.pathname,
       method: "POST",
       headers: {
         "Content-Type": `multipart/form-data; boundary=${boundary}`,
         "Content-Length": Buffer.byteLength(body),
+        "x-import-key": IMPORT_KEY,
       },
     };
 
-    const req = http.request(options, (res) => {
+    const req = httpModule.request(options, (res) => {
       let data = "";
       res.on("data", (c) => (data += c));
       res.on("end", () => {
@@ -153,16 +160,51 @@ function uploadIcon(name, svgContent, categoryId, tags) {
   });
 }
 
+function httpGet(urlPath) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlPath, API_BASE);
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (IS_HTTPS ? 443 : 80),
+      path: url.pathname + url.search,
+      method: "GET",
+      headers: { "x-import-key": IMPORT_KEY },
+    };
+    const req = httpModule.request(options, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try { resolve(JSON.parse(data)); } catch { resolve(data); }
+      });
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 async function main() {
   const files = fs.readdirSync(SVG_DIR).filter((f) => f.endsWith(".svg"));
   console.log(`Found ${files.length} SVG files to import\n`);
+  console.log(`API: ${API_BASE}\n`);
 
-  // Step 1: Create categories
+  // Step 1: Fetch existing categories or create new ones
   const categories = [...new Set(files.map((f) => getCategory(f.replace(".svg", ""))))].sort();
-  console.log(`Creating ${categories.length} categories...`);
+  console.log(`Setting up ${categories.length} categories...`);
   const categoryIds = {};
 
+  // Try to fetch existing categories first
+  const existing = await httpGet("/api/categories");
+  if (Array.isArray(existing)) {
+    for (const cat of existing) {
+      categoryIds[cat.name] = cat.ROWID;
+    }
+  }
+
   for (const cat of categories) {
+    if (categoryIds[cat]) {
+      console.log(`  ✓ ${cat} (existing ID: ${categoryIds[cat]})`);
+      continue;
+    }
     const result = await httpRequest("POST", "/api/categories", { name: cat });
     if (result.status === 201 || result.status === 200) {
       categoryIds[cat] = result.data.ROWID;

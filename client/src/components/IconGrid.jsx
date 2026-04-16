@@ -20,7 +20,7 @@ export default function IconGrid({ icons, onSelect }) {
           title={icon.name}
         >
           <div
-            className="w-6 h-6 text-zinc-400 group-hover:text-zinc-100 flex items-center justify-center"
+            className="w-6 h-6 text-zinc-100 group-hover:text-white flex items-center justify-center"
             dangerouslySetInnerHTML={{
               __html: (icon.variant?.svg_code || icon.variants?.[0]?.svg_code || "")
                 .replace(/ width="[^"]*"/g, "")

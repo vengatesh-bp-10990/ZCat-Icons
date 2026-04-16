@@ -79,21 +79,20 @@ router.get("/", async (req, res, next) => {
     const result = await zcql.executeZCQLQuery(query);
     const icons = result.map((row) => row[ICONS_TABLE] || row);
 
-    // If style filter, fetch variants for matching style
-    if (style) {
-      const iconIds = icons.map((i) => i.ROWID).filter(Boolean);
-      if (iconIds.length > 0) {
-        const variantQuery = `SELECT * FROM ${VARIANTS_TABLE} WHERE icon_id IN (${iconIds.join(",")}) AND style = '${sanitize(style)}'`;
-        const variants = await zcql.executeZCQLQuery(variantQuery);
-        const variantMap = {};
-        variants.forEach((v) => {
-          const variant = v[VARIANTS_TABLE] || v;
-          variantMap[variant.icon_id] = variant;
-        });
-        icons.forEach((icon) => {
-          icon.variant = variantMap[icon.ROWID] || null;
-        });
-      }
+    // Always fetch outlined variant for grid preview; override with style filter if set
+    const variantStyle = style || "outlined";
+    const iconIds = icons.map((i) => i.ROWID).filter(Boolean);
+    if (iconIds.length > 0) {
+      const variantQuery = `SELECT * FROM ${VARIANTS_TABLE} WHERE icon_id IN (${iconIds.join(",")}) AND style = '${sanitize(variantStyle)}'`;
+      const variants = await zcql.executeZCQLQuery(variantQuery);
+      const variantMap = {};
+      variants.forEach((v) => {
+        const variant = v[VARIANTS_TABLE] || v;
+        variantMap[variant.icon_id] = variant;
+      });
+      icons.forEach((icon) => {
+        icon.variant = variantMap[icon.ROWID] || null;
+      });
     }
 
     res.json({ icons, page: parseInt(page), limit: parseInt(limit) });

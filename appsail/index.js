@@ -17,24 +17,10 @@ const IS_LOCAL = !process.env.X_ZOHO_CATALYST_LISTEN_PORT;
 const app = express();
 const PORT = process.env.X_ZOHO_CATALYST_LISTEN_PORT || 3000;
 
-// CORS — restrict in production
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",")
-  : [];
-
-app.use(
-  cors(
-    IS_LOCAL
-      ? {}
-      : {
-          origin(origin, callback) {
-            if (!origin || allowedOrigins.includes(origin)) callback(null, true);
-            else callback(new Error("CORS: origin not allowed"));
-          },
-          credentials: true,
-        }
-  )
-);
+// CORS — only needed locally; Catalyst proxy handles CORS in production
+if (IS_LOCAL) {
+  app.use(cors());
+}
 
 // Security headers
 app.use((req, res, next) => {
